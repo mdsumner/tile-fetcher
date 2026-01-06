@@ -1,30 +1,33 @@
 /**
  * TileFetcher - Simple raster tile fetcher using a GDAL warp tile API
- *
+ * 
  * Installation:
  *   Option 1 - Script tag (via jsDelivr CDN):
  *     <script src="https://cdn.jsdelivr.net/gh/USER/REPO@main/tile-fetcher.js"></script>
  *     Then use: const fetcher = new TileFetcher({ endpoint: '...' });
- *
+ * 
  *   Option 2 - ES module:
  *     <script type="module">
  *       import 'https://cdn.jsdelivr.net/gh/USER/REPO@main/tile-fetcher.js';
  *       const fetcher = new TileFetcher({ endpoint: '...' });
  *     </script>
- *
+ * 
  * Requirements:
  *   The endpoint must accept GET requests with these query parameters:
  *   - bbox: Bounding box as "xmin,ymin,xmax,ymax" in target CRS units
  *   - crs: Target coordinate reference system as PROJ4 string or EPSG code
- *   - source: GDAL-readable data source path (e.g., /vsicurl/https://... for remote COGs,
- *      or WMTS:... for tile image servers)
+ *   - source: GDAL-readable data source path (e.g., /vsicurl/https://... for remote COGs)
  *   - bands: Comma-separated band indices (e.g., "1" or "1,2,3")
  *   - width: Output image width in pixels
  *   - height: Output image height in pixels
- *
+ * 
+ *   Optional parameters (passed through if provided):
+ *   - scale: "auto" to normalize values to 0-255, or omit for raw output
+ *   - palette: Color palette name (e.g., "viridis", "turbo") when scale=auto
+ * 
  *   The endpoint must return a PNG image warped to the requested bbox/crs/size.
  *   Server-side GDAL handles format decoding, reprojection, and resampling.
- *
+ * 
  * Usage:
  *   const fetcher = new TileFetcher({ endpoint: 'https://your-endpoint.com/tile' });
  *   const img = await fetcher.fetch({
@@ -32,7 +35,9 @@
  *     crs: '+proj=tmerc +lat_0=0 +lon_0=115 ...',
  *     source: '/vsicurl/https://example.com/data.tif',
  *     width: 512,
- *     height: 512
+ *     height: 512,
+ *     scale: 'auto',      // optional
+ *     palette: 'viridis'  // optional
  *   });
  *   ctx.drawImage(img, 0, 0);
  */
@@ -55,7 +60,7 @@ class TileFetcher {
      * Build URL for tile request
      */
     buildUrl(params) {
-        const { bbox, crs, source, bands, width, height } = params;
+        const { bbox, crs, source, bands, width, height, ...extra } = params;
         const urlParams = new URLSearchParams({
             bbox: Array.isArray(bbox) ? bbox.join(',') : bbox,
             crs: crs,
@@ -64,6 +69,14 @@ class TileFetcher {
             width: width || this.defaultWidth,
             height: height || this.defaultHeight
         });
+        
+        // Add any extra params (scale, palette, etc.)
+        for (const [key, value] of Object.entries(extra)) {
+            if (value !== undefined && value !== null && value !== '') {
+                urlParams.set(key, value);
+            }
+        }
+        
         return `${this.endpoint}?${urlParams.toString()}`;
     }
 
@@ -71,24 +84,27 @@ class TileFetcher {
      * Generate cache key from params
      */
     cacheKey(params) {
+        const { bbox, crs, source, bands, width, height, ...extra } = params;
         return JSON.stringify({
-            bbox: params.bbox,
-            crs: params.crs,
-            source: params.source,
-            bands: params.bands || this.defaultBands,
-            width: params.width || this.defaultWidth,
-            height: params.height || this.defaultHeight
+            bbox: bbox,
+            crs: crs,
+            source: source,
+            bands: bands || this.defaultBands,
+            width: width || this.defaultWidth,
+            height: height || this.defaultHeight,
+            ...extra
         });
     }
 
     /**
      * Fetch tile and return as ImageBitmap
-     * @param {Object} params - { bbox, crs, source, bands?, width?, height? }
+     * @param {Object} params - { bbox, crs, source, bands?, width?, height?, ...extra }
+     *   Extra params (e.g., scale, palette) are passed through to the endpoint
      * @returns {Promise<ImageBitmap>}
      */
     async fetch(params) {
         const key = this.cacheKey(params);
-
+        
         // Check cache
         if (this.cacheEnabled && this.cache.has(key)) {
             return this.cache.get(key);
@@ -96,7 +112,7 @@ class TileFetcher {
 
         const url = this.buildUrl(params);
         const response = await fetch(url);
-
+        
         if (!response.ok) {
             throw new Error(`Tile fetch failed: ${response.status} ${response.statusText}`);
         }
