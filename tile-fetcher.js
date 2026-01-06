@@ -61,8 +61,14 @@ class TileFetcher {
      */
     buildUrl(params) {
         const { bbox, crs, source, bands, width, height, ...extra } = params;
+        
+        // Format bbox values as fixed-point to avoid exponential notation (1e+06 → 1000000)
+        const bboxStr = Array.isArray(bbox) 
+            ? bbox.map(v => Number(v).toFixed(6).replace(/\.?0+$/, '')).join(',')
+            : bbox;
+        
         const urlParams = new URLSearchParams({
-            bbox: Array.isArray(bbox) ? bbox.join(',') : bbox,
+            bbox: bboxStr,
             crs: crs,
             source: source,
             bands: bands || this.defaultBands,
@@ -70,7 +76,7 @@ class TileFetcher {
             height: height || this.defaultHeight
         });
         
-        // Add any extra params (scale, palette, etc.)
+        // Add any extra params (rescale, palette, etc.)
         for (const [key, value] of Object.entries(extra)) {
             if (value !== undefined && value !== null && value !== '') {
                 urlParams.set(key, value);
