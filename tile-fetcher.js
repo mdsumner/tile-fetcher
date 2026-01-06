@@ -22,8 +22,8 @@
  *   - height: Output image height in pixels
  * 
  *   Optional parameters (passed through if provided):
- *   - scale: "auto" to normalize values to 0-255, or omit for raw output
- *   - palette: Color palette name (e.g., "viridis", "turbo") when scale=auto
+ *   - rescale: "auto" to normalize values to 0-255, or omit for raw output
+ *   - palette: Color palette name (e.g., "viridis", "turbo") when rescale=auto
  * 
  *   The endpoint must return a PNG image warped to the requested bbox/crs/size.
  *   Server-side GDAL handles format decoding, reprojection, and resampling.
@@ -36,7 +36,7 @@
  *     source: '/vsicurl/https://example.com/data.tif',
  *     width: 512,
  *     height: 512,
- *     scale: 'auto',      // optional
+ *     rescale: 'auto',    // optional
  *     palette: 'viridis'  // optional
  *   });
  *   ctx.drawImage(img, 0, 0);
